@@ -1,10 +1,16 @@
 import pandas as pd
+import numpy as np
 from cortex.raw.gps import gps
 from cortex.raw.accelerometer import accelerometer
 from cortex.raw.survey import survey
+import similaritymeasures as sm
+import time
+from fastdtw import fastdtw
+from scipy.spatial.distance import euclidean
+
 
 class IOI:
-
+    
     def __init__(self, id, start, end):
         '''
         Constructor
@@ -25,7 +31,7 @@ class IOI:
         self.get_acc_df()
         self.get_survey_df()
         self.get_trajectories()
-        
+        self.baseline_trajectories = None
         
     def get_gps_df(self):
         '''    
@@ -110,13 +116,51 @@ class IOI:
             for i in range(len(df_list)):
                 d[df_list[i].index[0].dayofweek] = [group[1] for group in df_list[i].groupby(df_list[i].index.date)]
             self.traj_dict = d
+        #else:
+            #df_list = [group[1] for group in df.groupby(df.index.dayofweek)]
         
-    def get_baseline_trajectory(self):
+    def get_baseline_trajectories(self):
         '''
-        Get Baseline Trajectory 
+        Get Baseline Trajectories
         '''
-        return baseline
+        self.baseline_trajectories = []
+        for key in self.traj_dict.keys():
+            start = time.time()
+            traj_list = self.traj_dict[key]
+            baseline = self.get_matrix(traj_list)
+            self.baseline_trajectories.append(baseline)
+            print(time.time() - start)
             
-            
+
+    def similarity_measure(self, df1, df2, frechet=True):
+        '''
+        Calculate similarity metric between two df's - Frechet for now (else FastDTW)
+        '''
+        # TODO add other similarity measures as options
+        arr1 = df1[['latitude', 'longitude']].to_numpy()
+        arr2 = df2[['latitude', 'longitude']].to_numpy()
+        if frechet:
+            return sm.frechet_dist(arr1, arr2)
+        else:
+            fastDTW_score, _ = fastdtw(arr1, arr2, dist=euclidean)
+            return fastDTW_score
+
+    def get_matrix(self, traj_list):
+        n = len(traj_list)
+        a = np.zeros(shape=(n,n))
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    a[i][j] = np.inf
+                else:
+                    if a[i][j] == 0:
+                        val = self.similarity_measure(traj_list[i], traj_list[j])
+                        print(val)
+                        a[i][j] = val
+                        a[j][i] = val
+                    else:
+                        pass
+        return a
+        
     def set_temporal():
         pass
